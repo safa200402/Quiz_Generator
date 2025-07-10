@@ -19,4 +19,6 @@ git remote add origin https://github.com/safa200402/Quiz_Generator.git
 git branch -M main
 git push -u origin main
 
+git push --force origin main
+
 git config --system core.longpaths true
