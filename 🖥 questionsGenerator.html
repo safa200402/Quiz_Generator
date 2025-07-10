@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Machine Learning Prompts</title>
+    <style>
+        a {
+            text-decoration: none !important;
+
+        }
+    </style>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<div class="container py-5">
+    <h1 class="mb-4">Machine Learning Prompts</h1>
+    <a href="/" class="btn btn-primary mb-3 w-100" style=" background: linear-gradient(145deg, #00c6ff, #0072ff); border: none; text-align: center; font-size: 16px; font-weight: bold; border-radius: 12px; box-shadow: 0 8px 16px rgba(0, 114, 255, 0.3), 0 4px 6px rgba(0, 114, 255, 0.2), inset 0 1px 0 rgba(255,255,255,0.4); ">Kembali Ke Quiz Generator</a>
+    <form id="mlForm">
+        <div class="mb-3">
+            <label for="input1" class="form-label">Prompt Dasar</label>
+            <textarea class="form-control" id="input1" rows="4" placeholder="Enter text for prompt 1">
+Aku ingin kamu di chat ini membuatkan soal pilihan ganda dari text yang akan aku berikan
+Aku ingin jenis soalnya adalah ma‘lumatiyyah
+Contoh:  
+➡️Warna domba adalah?  
+Putih ✅  
+➡️Buah yang kaya akan vitamin C adalah...?
+Pisang
+Semangka
+Jeruk ✅
+Apel
+
+Jangan menggunakan simbol selain yang disebutkan.
+Gunakan Bahasa Arab. Pastikan jumlah pilihan adalah 4.
+            </textarea>
+        </div>
+        <div class="mb-3">
+            <label for="input2" class="form-label">Maximum word count</label>
+            <input type="number" class="form-control" id="input2" value="200" placeholder="Enter maximum word count">
+        </div>
+        <div class="mb-3">
+            <label for="input1" class="form-label">Input Texts</label>
+            <textarea class="form-control" id="input3" rows="4" placeholder="Enter text for prompt 1"></textarea>
+        </div>
+        <div class="mb-3">
+            <label for="tokenInput" class="form-label">Input Tokens | <a href="https://github.com/settings/tokens">Klik Untuk Dapatkan Token (Yang klasik)</a></label>
+            <input type="text" class="form-control" id="tokenInput" placeholder="Enter tokens separated by comma or space" value="safa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safaz">
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Tokens (Wrapped)</label>
+            <div id="tokenWrapper" class="d-flex flex-wrap gap-2"></div>
+        </div>
+        <pre>
+Pemberitahuan: Kalau hasilnya biru maka error, ulangi lagi, atau perbarui token.
+
+        </pre>
+        <button type="submit" class="btn btn-primary">Submit</button>
+        <button class="btn" style=" color: white; background: #333; " onclick="copyTextFromResult()">Copy Hasil</button>
+    </form>
+
+    <div class="mt-4" id="results"></div>
+</div>
+<script>
+    let tokens = [];
+
+    function ambilToken() {
+        const input = document.getElementById('tokenInput').value.trim();
+        const tokens_ = input.split(/[\s,]+/).filter(t => t !== '');
+        const wrapper = document.getElementById('tokenWrapper');
+
+        // Kosongkan tampilan sebelumnya
+        wrapper.innerHTML = '';
+        tokens = tokens_;
+
+        // Tambahkan token dalam bentuk badge
+        tokens_.forEach(token => {
+            const span = document.createElement('span');
+            span.className = 'badge bg-primary';
+            span.textContent = token;
+            wrapper.appendChild(span);
+        });
+        console.log(tokens);
+
+    };
+    ambilToken()
+    
+    document.getElementById('tokenInput').addEventListener('input', function () {
+        ambilToken();
+        console.log(tokens);
+    });
+
+    document.getElementById('mlForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        const prompts = [
+            document.getElementById('input3').value
+        ];
+
+        document.getElementById('results').innerHTML = '';
+        processAllTextareas(prompts);
+    });
+
+    //Sepertinya versi tanpa fitur kalau token error
+    async function fetchWithRetry_(prompt) {
+        var systemPrompt = document.getElementById('input1').value;
+        for (let i = 0; i < tokens.length; i++) {
+            try {
+                const response = await fetch('https://models.github.ai/inference/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${tokens[i]}`
+                    },
+                    body: JSON.stringify({
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: prompt }
+                        ],
+                        model: 'openai/gpt-4o-mini',
+                        temperature: 1,
+                        max_tokens: 4096,
+                        top_p: 1
+                    })
+                });
+
+                if (!response.ok) {
+                    console.warn(`Token ${i + 1} failed: ${response.status}`);
+                    continue; // coba token berikutnya
+                }
+
+                const data = await response.json();
+                return data.choices?.[0]?.message?.content || 'No response';
+            } catch (err) {
+                console.warn(`Error with token ${i + 1}: ${err.message}`);
+                continue;
+            }
+        }
+        throw new Error('Semua token gagal.');
+    }
+
+    function copyTextFromResult() {
+        const resultElement = document.getElementById('result');
+
+        if (!resultElement) {
+            console.error('Elemen dengan ID "result" tidak ditemukan.');
+            return;
+        }
+
+        // Buat range untuk memilih seluruh isi result
+        const range = document.createRange();
+        range.selectNodeContents(resultElement);
+
+        // Hapus selection sebelumnya dan pilih range baru
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+
+        try {
+            // Eksekusi perintah salin
+            const successful = document.execCommand('copy');
+            if (successful) {
+            console.log('Teks berhasil disalin!');
+            } else {
+            console.warn('Perintah salin gagal.');
+            }
+        } catch (err) {
+            console.error('Gagal menyalin teks:', err);
+        }
+
+        // (Opsional) Hapus seleksi agar tidak terlihat di layar
+        selection.removeAllRanges();
+    }
+
+    let fetchCallCount = 0; // Variabel global untuk menghitung jumlah pemanggilan
+
+    async function fetchWithRetry(prompt) {
+        console.log("➡️ fetchWithRetry: " + prompt);
+        fetchCallCount++;
+        
+        if (fetchCallCount > 1) {
+            console.error(`fetchWithRetry() sudah dipanggil ${fetchCallCount} kali, hentikan!`);
+            throw new Error(`fetchWithRetry() sudah dipanggil ${fetchCallCount} kali, hentikan!`);
+        }
+
+        var systemPrompt = document.getElementById('input1').value;
+
+        for (let i = 0; i < tokens.length; i++) {
+            try {
+                const response = await fetch('https://models.github.ai/inference/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${tokens[i]}`
+                    },
+                    body: JSON.stringify({
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: prompt }
+                        ],
+                        model: 'openai/gpt-4o-mini',
+                        temperature: 1,
+                        max_tokens: 4096,
+                        top_p: 1
+                    })
+                });
+
+                if (!response.ok) {
+                    console.warn(`Token ${i + 1} gagal: ${response.status}`);
+                    continue; // coba token berikutnya
+                }
+
+                const data = await response.json();
+                console.log(`Sukses dengan token ${i + 1}:`, data);
+                fetchCallCount = 0;
+                return data.choices?.[0]?.message?.content || 'No response';
+            } catch (err) {
+                console.error(`Error dengan token ${i + 1}: ${err.message}`);
+                continue;
+            }
+        }
+
+        console.error('Semua token gagal.');
+        fetchCallCount = 0;
+        throw new Error('Semua token gagal.');
+    }
+
+
+    function splitLineToChunks(words, wordLimit) {
+        // Fungsi untuk pecah array kata jadi potongan dengan max wordLimit
+        const chunks = [];
+        for (let i = 0; i < words.length; i += wordLimit) {
+            chunks.push(words.slice(i, i + wordLimit).join(' '));
+        }
+        return chunks;
+    }
+
+    function splitIntoChunksByWordLimit(text, wordLimit = 200) {
+        const lines = text.split(/\r?\n/);
+        const result = [];
+        let currentChunk = '';
+        let currentWordCount = 0;
+
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine) continue; // skip baris kosong
+            
+            const wordsInLine = trimmedLine.split(/\s+/);
+
+            // Kalau baris lebih dari wordLimit, pecah dulu jadi beberapa chunk
+            if (wordsInLine.length > wordLimit) {
+            // Simpan chunk yang sedang dibangun jika ada
+            if (currentChunk) {
+                result.push(currentChunk);
+                currentChunk = '';
+                currentWordCount = 0;
+            }
+            // Pecah baris jadi potongan-potongan
+            const splittedChunks = splitLineToChunks(wordsInLine, wordLimit);
+            for (const chunk of splittedChunks) {
+                result.push(chunk);
+            }
+            } else {
+            // Kalau baris pendek, coba gabungkan ke chunk sekarang
+            if (currentWordCount + wordsInLine.length <= wordLimit) {
+                currentChunk += (currentChunk ? '\n' : '') + trimmedLine;
+                currentWordCount += wordsInLine.length;
+            } else {
+                // chunk sudah penuh, simpan dulu
+                if (currentChunk) result.push(currentChunk);
+                // mulai chunk baru
+                currentChunk = trimmedLine;
+                currentWordCount = wordsInLine.length;
+            }
+            }
+        }
+        
+        if (currentChunk) result.push(currentChunk);
+
+        return result;
+    }
+
+
+    async function processAllTextareas(textareas) {
+        let index = 1;
+
+        //Iterasi ini kayaknya cuman berjalan satu kali
+        for (let i = 0; i < textareas.length; i++) {
+            const chunks = splitIntoChunksByWordLimit(textareas[i], document.getElementById('input2').value);
+            console.log("chunks: ");
+            console.log(chunks);
+
+            for (let j = 0; j < chunks.length; j++) {
+                const resultDiv = document.createElement('div');
+                resultDiv.innerHTML = `<strong>Chunk ${j + 1}:</strong> Processing...`;
+                document.getElementById('results').appendChild(resultDiv);
+
+                try {
+                    const reply = await fetchWithRetry(chunks[j]);
+                    resultDiv.innerHTML = `<pre dir"auto"">${reply}</pre>`;
+                } catch (error) {
+                    // document.getElementById('results').innerHTML += "<hr>"
+                    resultDiv.innerHTML = `<strong>Chunk ${j + 1}:</strong> Error - ${error.message}`;
+                    resultDiv.innerHTML = `<pre dir"auto" style=" background: aliceblue; white-space: pre-wrap; ">${chunks[j]}</pre>`;
+                }
+            }
+        }
+    }
+</script>
+
+<script>
+
+</script>
+
+<script>
+    
+</script>
+
+</body>
+</html>
